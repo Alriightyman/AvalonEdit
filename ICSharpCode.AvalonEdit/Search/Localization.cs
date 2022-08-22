@@ -72,5 +72,19 @@ namespace ICSharpCode.AvalonEdit.Search
 		public virtual string NoMatchesFoundText {
 			get { return "No matches found!"; }
 		}
+
+		/// <summary>
+		/// Default: 'Replace next (ALT+R)'
+		/// </summary>
+		public virtual string ReplaceNextText {
+			get { return "Replace next (ALT+R)"; }
+		}
+
+		/// <summary>
+		/// Default: 'Replace all (ALT+A)'
+		/// </summary>
+		public virtual string ReplaceAllText {
+			get { return "Replace all (ALT+A)"; }
+		}
 	}
 }

@@ -43,6 +43,8 @@ namespace ICSharpCode.AvalonEdit.Search
 		TextBox searchTextBox;
 		Popup dropdownPopup;
 		SearchPanelAdorner adorner;
+		TextBox replaceTextBox;
+		Border searchPanel;
 
 		#region DependencyProperties
 		/// <summary>
@@ -111,6 +113,36 @@ namespace ICSharpCode.AvalonEdit.Search
 		public static readonly DependencyProperty MarkerBrushProperty =
 			DependencyProperty.Register("MarkerBrush", typeof(Brush), typeof(SearchPanel),
 										new FrameworkPropertyMetadata(Brushes.LightGreen, MarkerBrushChangedCallback));
+
+		/// <summary>
+		/// Dependency property for <see cref="Replacement"/>.
+		/// </summary>
+		public static readonly DependencyProperty ReplacementProperty =
+			DependencyProperty.Register("Replacement", typeof(string), typeof(SearchPanel),
+										new FrameworkPropertyMetadata(""));
+
+		/// <summary>
+		/// Gets/sets the replacement.
+		/// </summary>
+		public string Replacement {
+			get { return (string)GetValue(ReplacementProperty); }
+			set { SetValue(ReplacementProperty, value); }
+		}
+
+		/// <summary>
+		/// Dependency property for <see cref="ShowReplace"/>.
+		/// </summary>
+		public static readonly DependencyProperty ShowReplaceProperty =
+			DependencyProperty.Register("ShowReplace", typeof(bool), typeof(SearchPanel),
+										new FrameworkPropertyMetadata(false));
+
+		/// <summary>
+		/// Gets/sets whether the replace is shown.
+		/// </summary>
+		public bool ShowReplace {
+			get { return (bool)GetValue(ShowReplaceProperty); }
+			set { SetValue(ShowReplaceProperty, value); }
+		}
 
 		/// <summary>
 		/// Gets/sets the Brush used for marking search results in the TextView.
@@ -280,8 +312,13 @@ namespace ICSharpCode.AvalonEdit.Search
 			textArea.DocumentChanged += textArea_DocumentChanged;
 			KeyDown += SearchLayerKeyDown;
 
+			this.CommandBindings.Add(new CommandBinding(SearchCommands.Find, (sender, e) => Open(false)));
+			this.CommandBindings.Add(new CommandBinding(SearchCommands.Replace, (sender, e) => Open(true)));
+			this.CommandBindings.Add(new CommandBinding(SearchCommands.ReplaceOpen, (sender, e) => ShowReplace = !ShowReplace));
 			this.CommandBindings.Add(new CommandBinding(SearchCommands.FindNext, (sender, e) => FindNext()));
 			this.CommandBindings.Add(new CommandBinding(SearchCommands.FindPrevious, (sender, e) => FindPrevious()));
+			this.CommandBindings.Add(new CommandBinding(SearchCommands.ReplaceNext, (sender, e) => ReplaceNext()));
+			this.CommandBindings.Add(new CommandBinding(SearchCommands.ReplaceAll, (sender, e) => ReplaceAll()));
 			this.CommandBindings.Add(new CommandBinding(SearchCommands.CloseSearchPanel, (sender, e) => Close()));
 			IsClosed = true;
 		}
@@ -307,7 +344,9 @@ namespace ICSharpCode.AvalonEdit.Search
 		{
 			base.OnApplyTemplate();
 
+			searchPanel = Template.FindName("PART_searchPanel", this) as Border;
 			searchTextBox = Template.FindName("PART_searchTextBox", this) as TextBox;
+			replaceTextBox = Template.FindName("PART_replaceTextBox", this) as TextBox;
 			dropdownPopup = Template.FindName("PART_dropdownPopup", this) as Popup;
 		}
 
@@ -369,6 +408,45 @@ namespace ICSharpCode.AvalonEdit.Search
 			}
 		}
 
+		/// <summary>
+		/// Replaces current result if any and moves to the next occurrence in the file.
+		/// </summary>
+		public int ReplaceNext()
+		{
+			SearchResult result = renderer.CurrentResults.FindFirstSegmentWithStartAfter(textArea.Caret.Offset);
+			var count = renderer.CurrentResults.Count;
+			if (result != null
+				&& !textArea.Selection.IsEmpty
+				&& textArea.Document.GetOffset(textArea.Selection.StartPosition.Location) == result.StartOffset
+				&& textArea.Document.GetOffset(textArea.Selection.EndPosition.Location) == result.EndOffset) {
+				Replace(result);
+				--count;
+			}
+			result = renderer.CurrentResults.FindFirstSegmentWithStartAfter(textArea.Caret.Offset + textArea.Selection.Length);
+			if (result == null)
+				result = renderer.CurrentResults.FirstSegment;
+			if (result != null) {
+				SelectResult(result);
+				return count;
+			}
+			return 0;
+		}
+
+		/// <summary>
+		/// Replaces all occurrences in the file.
+		/// </summary>
+		public void ReplaceAll()
+		{
+			var count = ReplaceNext();
+			while (count-- > 0)
+				ReplaceNext();
+		}
+
+		void Replace(SearchResult result)
+		{
+			currentDocument.Replace(textArea.Selection.Segments.FirstOrDefault(), result.ReplaceWith(Replacement));
+		}
+
 		ToolTip messageView = new ToolTip { Placement = PlacementMode.Bottom, StaysOpen = true, Focusable = false };
 
 		void DoSearch(bool changeSelection)
@@ -393,7 +471,7 @@ namespace ICSharpCode.AvalonEdit.Search
 				if (!renderer.CurrentResults.Any()) {
 					messageView.IsOpen = true;
 					messageView.Content = Localization.NoMatchesFoundText;
-					messageView.PlacementTarget = searchTextBox;
+					messageView.PlacementTarget = searchPanel;
 				} else
 					messageView.IsOpen = false;
 			}
@@ -414,7 +492,11 @@ namespace ICSharpCode.AvalonEdit.Search
 			switch (e.Key) {
 				case Key.Enter:
 					e.Handled = true;
-					if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
+					if (replaceTextBox != null
+						&& replaceTextBox.IsFocused) {
+						ReplaceNext();
+					}
+					else if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
 						FindPrevious();
 					else
 						FindNext();
@@ -464,8 +546,9 @@ namespace ICSharpCode.AvalonEdit.Search
 		/// <summary>
 		/// Opens the an existing search panel.
 		/// </summary>
-		public void Open()
+		public void Open(bool showReplace)
 		{
+			ShowReplace = showReplace;
 			if (!IsClosed) return;
 			var layer = AdornerLayer.GetAdornerLayer(textArea);
 			if (layer != null)
@@ -525,7 +608,7 @@ namespace ICSharpCode.AvalonEdit.Search
 			this.MatchCase = matchCase;
 			this.UseRegex = useRegex;
 			this.WholeWords = wholeWords;
-		}
+		}		
 	}
 
 	class SearchPanelAdorner : Adorner
@@ -554,6 +637,6 @@ namespace ICSharpCode.AvalonEdit.Search
 		{
 			panel.Arrange(new Rect(new Point(0, 0), finalSize));
 			return new Size(panel.ActualWidth, panel.ActualHeight);
-		}
+		}		
 	}
 }

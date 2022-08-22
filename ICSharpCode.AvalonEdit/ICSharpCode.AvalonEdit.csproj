@@ -47,6 +47,8 @@
   <ItemGroup>
     <None Remove="Search\next.png" />
     <None Remove="Search\prev.png" />
+    <None Remove="Search\replaceall.png" />
+    <None Remove="Search\replacenext.png" />
     <None Remove="themes\RightArrow.cur" />
     <None Include="AvalonEditNuGetPackageIcon.png">
       <Pack>True</Pack>
@@ -54,6 +56,8 @@
     </None>
     <Resource Include="Search\next.png" />
     <Resource Include="Search\prev.png" />
+    <Resource Include="Search\replaceall.png" />
+    <Resource Include="Search\replacenext.png" />
     <Resource Include="themes\RightArrow.cur" />
   </ItemGroup>
   <ItemGroup>
